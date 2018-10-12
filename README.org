@@ -1,0 +1,49 @@
+#+TITLE: hplc_interface_python
+#+AUTHOR: Peter Polidoro
+#+EMAIL: peterpolidoro@gmail.com
+
+* Package Information
+  - Author :: Peter Polidoro
+  - License :: BSD
+
+  This Python package (hplc_interface) creates a class named
+  HplcInterface.
+
+* Example Usage
+
+
+  #+BEGIN_SRC python
+    from hplc_interface import HplcInterface
+    dev = HplcInterface() # Might automatically find devices if available
+  #+END_SRC
+
+* More Detailed Modular Device Information
+
+  [[https://github.com/janelia-modular-devices/modular-devices]]
+
+* Installation
+
+  [[https://github.com/janelia-pypi/python_setup][Setup Python]]
+
+** Install Arduino and Teensyduino on your Host Machine
+
+   [[https://github.com/janelia-arduino/arduino_setup][Setup Arduino]]
+
+** Linux and Mac OS X
+
+   #+BEGIN_SRC sh
+     mkdir -p ~/virtualenvs/hplc_interface
+     virtualenv ~/virtualenvs/hplc_interface
+     #Python3
+     virtualenv -p python3 ~/virtualenvs/hplc_interface
+     source ~/virtualenvs/hplc_interface/bin/activate
+     pip install hplc_interface
+   #+END_SRC
+
+** Windows
+
+   #+BEGIN_SRC sh
+     virtualenv C:\virtualenvs\hplc_interface
+     C:\virtualenvs\hplc_interface\Scripts\activate
+     pip install hplc_interface
+   #+END_SRC
