@@ -36,18 +36,18 @@
 ** Linux and Mac OS X
 
    #+BEGIN_SRC sh
-     mkdir -p ~/virtualenvs/hplc_interface
-     virtualenv ~/virtualenvs/hplc_interface
+     mkdir -p ~/venvs/hplc_interface
+     virtualenv ~/venvs/hplc_interface
      #Python3
-     virtualenv -p python3 ~/virtualenvs/hplc_interface
-     source ~/virtualenvs/hplc_interface/bin/activate
+     virtualenv -p python3 ~/venvs/hplc_interface
+     source ~/venvs/hplc_interface/bin/activate
      pip install hplc_interface
    #+END_SRC
 
 ** Windows
 
    #+BEGIN_SRC sh
-     virtualenv C:\virtualenvs\hplc_interface
-     C:\virtualenvs\hplc_interface\Scripts\activate
+     virtualenv C:\venvs\hplc_interface
+     C:\venvs\hplc_interface\Scripts\activate
      pip install hplc_interface
    #+END_SRC

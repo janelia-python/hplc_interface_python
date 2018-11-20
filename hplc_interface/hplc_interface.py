@@ -1,12 +1,15 @@
 from __future__ import print_function, division
 import time
-import atexit
 import os
-from datetime import datetime
+import yaml
 from threading import Timer
-import csv
+import signal
+import sys
 
-from modular_client import ModularClient
+# from datetime import datetime
+# import csv
+
+from modular_client import ModularClients
 
 try:
     from pkg_resources import get_distribution, DistributionNotFound
@@ -34,163 +37,137 @@ class HplcInterface():
     dev = HplcInterface() # Might automatically find devices if available
     '''
 
-    _CHECK_FOR_UNREAD_DATA_PERIOD = 4.0
-    _RESET_DURATION = 3.0
+    _CONFIG_FILENAME = 'config.yaml'
+    _WAVELENGTH_COUNT = 4
+    _DETECTOR = 'ultraviolet_detector_interface'
+    _SAMPLE_FREQUENCY = 1
+    _TIMEOUT = 4.0
 
     def __init__(self,*args,**kwargs):
+        self.is_setup = False
+        signal.signal(signal.SIGINT,self._signal_handler)
         if 'debug' in kwargs:
             self.debug = kwargs['debug']
         else:
             kwargs.update({'debug': DEBUG})
             self.debug = DEBUG
-        self._base_path = os.path.expanduser('~/mouse_joystick')
+        self._base_path = os.path.expanduser('~/Desktop')
         self._args = args
         self._kwargs = kwargs
-        t_start = time.time()
-        atexit.register(self._exit_hplc_interface)
-        self._assay_running = False
-        self._trials_fieldnames = ['trial_index',
-                                   'successful_trial_count',
-                                   'trial',
-                                   'block',
-                                   'set',
-                                   'reach_position_0',
-                                   'reach_position_1',
-                                   'pull_torque',
-                                   'pull_threshold',
-                                   'trial_start',
-                                   'mouse_ready',
-                                   'joystick_ready',
-                                   'pull',
-                                   'push',
-                                   'timeout',
-                                   'trial_abort']
-        self._trial_fieldnames = ['date_time',
-                                  'milliseconds',
-                                  'joystick_position']
-        self._setup_modular_clients()
-        t_end = time.time()
-        self._debug_print('Initialization time =', (t_end - t_start))
 
-    def _setup_modular_clients(self):
-        self._modular_clients = ModularClients(*self._args,**self._kwargs)
-        mjc_name = 'mouse_joystick_controller'
-        mjc_form_factor = '5x3'
-        mjc_serial_number = 0
-        if (mjc_name not in self._modular_clients):
-            raise RuntimeError(mjc_name + ' is not connected!')
-        self.mouse_joystick_controller = self._modular_clients[mjc_name][mjc_form_factor][mjc_serial_number]
-        ei_name = 'encoder_interface_simple'
-        ei_form_factor = '3x2'
-        ei_serial_number = 0
-        if (ei_name not in self._modular_clients):
-            raise RuntimeError(ei_name + ' is not connected!')
-        self.encoder_interface = self._modular_clients[ei_name][ei_form_factor][ei_serial_number]
-
-    def start_assay(self):
-        if self._assay_running:
-            print('Assay already running.')
-            return
-
-        print('Starting assay...')
-
-        print('Resetting devices...')
-        self.mouse_joystick_controller.reset_all()
-        time.sleep(self._RESET_DURATION)
-        self._setup_modular_clients()
-        print('Devices reset.')
-
-        print('Setting time.')
-        self.mouse_joystick_controller.set_time(time.time())
-        self.encoder_interface.set_time(time.time())
-
-        print('Setting up data files.')
-        self._assay_path = os.path.join(self._base_path,self._get_date_time_str())
-        os.makedirs(self._assay_path)
-        trials_filename = 'trials.csv'
-        trials_path = os.path.join(self._assay_path,trials_filename)
-        self._trials_file = open(trials_path,'w')
-        self._trials_writer = csv.DictWriter(self._trials_file,fieldnames=self._trials_fieldnames)
-        self._trials_writer.writeheader()
-        self.mouse_joystick_controller.start_assay()
-        self._assay_running = True
-        self._check_for_unread_data_timer = Timer(self._CHECK_FOR_UNREAD_DATA_PERIOD,self._check_for_unread_data)
-        self._check_for_unread_data_timer.start()
-        print('Assay running!')
-
-    def abort_assay(self):
-        self._assay_running = False
+    def _signal_handler(self,sig,frame):
+        self.stop()
         try:
-            self._trials_file.close()
-        except (AttributeError,ValueError):
-            pass
-        try:
-            self._check_for_unread_data_timer.cancel()
-        except AttributeError:
-            pass
-        try:
-            self.mouse_joystick_controller.abort_assay()
-        except:
+            sys.exit(0)
+        except SystemExit as e:
             pass
 
     def _debug_print(self, *args):
         if self.debug:
             print(*args)
 
-    def _exit_hplc_interface(self):
-        self.abort_assay()
+    def _setup(self):
+        t_start = time.time()
+        self._load_config_file()
+        self._setup_modular_clients()
+        self._configure()
+        t_end = time.time()
+        self.is_setup = True
+        self._debug_print('Setup time =', (t_end - t_start))
 
-    def _get_date_time_str(self,timestamp=None):
-        if timestamp is None:
-            d = datetime.fromtimestamp(time.time())
-        elif timestamp == 0:
-            date_time_str = 'NULL'
-            return date_time_str
-        else:
-            d = datetime.fromtimestamp(timestamp)
-        date_time_str = d.strftime('%Y-%m-%d-%H-%M-%S')
-        return date_time_str
+    def _load_config_file(self):
+        print()
+        print('loading config.yaml...')
+        self._config_file_path = os.path.join(self._base_path,self._CONFIG_FILENAME)
+        with open(self._config_file_path,'r') as config_stream:
+            self._config = yaml.load(config_stream)
+        print('config.yaml loaded successfully')
 
-    def _get_time_from_date_time_str(self,date_time_str):
-        if date_time_str != 'NULL':
-            timestamp = time.mktime(datetime.strptime(date_time_str,'%Y-%m-%d-%H-%M-%S').timetuple())
-        else:
-            timestamp = 0
-        return timestamp
+    def _setup_modular_clients(self):
+        print()
+        print('Detecting USB devices...')
+        self._modular_clients = ModularClients(*self._args,**self._kwargs,timeout=self._TIMEOUT)
+        hc_name = 'hplc_controller'
+        hc_form_factor = '3x2'
+        hc_serial_number = 0
+        if (hc_name not in self._modular_clients):
+            raise RuntimeError(hc_name + ' is not connected!')
+        self.hplc_controller = self._modular_clients[hc_name][hc_form_factor][hc_serial_number]
+        print()
+        print(f'{hc_name} is connected')
 
-    def _check_for_unread_data(self):
-        if not self._assay_running:
-            return
-        status = self.mouse_joystick_controller.get_assay_status()
-        unread_trial_timing_data = status.pop('unread_trial_timing_data')
-        state = status.pop('state')
-        if unread_trial_timing_data:
-            encoder_samples = self.encoder_interface.get_samples()
-            trial_filename = 'trial_{0}.csv'.format(status['trial_index'])
-            trial_path = os.path.join(self._assay_path,trial_filename)
-            with open(trial_path,'w') as trial_file:
-                self._trial_writer = csv.writer(trial_file,quotechar='\"',quoting=csv.QUOTE_MINIMAL)
-                self._trial_writer.writerow(self._trial_fieldnames)
-                for sample in encoder_samples:
-                    sample[0] = self._get_date_time_str(sample[0])
-                    self._trial_writer.writerow(sample)
-            trial_timing_data = self.mouse_joystick_controller.get_trial_timing_data()
-            trial_timing_data_date_time = {key: self._get_date_time_str(value) for (key,value) in trial_timing_data.items()}
-            trial_data = {**status,**trial_timing_data_date_time}
-            print('Trial data:')
-            print(trial_data)
-            self._trials_writer.writerow(trial_data)
-            self.mouse_joystick_controller.set_time(time.time())
-            self.encoder_interface.set_time(time.time())
-        if state == 'ASSAY_FINISHED':
-            self._assay_running = False
-        else:
-            self._check_for_unread_data_timer = Timer(self._CHECK_FOR_UNREAD_DATA_PERIOD,self._check_for_unread_data)
-            self._check_for_unread_data_timer.start()
+        udi_name = 'ultraviolet_detector_interface'
+        udi_form_factor = '3x2'
+        udi_serial_number = 0
+        if (udi_name not in self._modular_clients):
+            raise RuntimeError(udi_name + ' is not connected!')
+        self.ultraviolet_detector_interface = self._modular_clients[udi_name][udi_form_factor][udi_serial_number]
+        print()
+        print(f'{udi_name} is connected')
+        try:
+            detector_info = self.ultraviolet_detector_interface.get_detector_info()
+            print(f'detector_info: {detector_info}')
+            self.detector_connected = True
+        except IOError:
+            print(f'ECOM Toydad UV detector is not connected to the {udi_name}!')
+            self.detector_connected = False
 
+    def _configure(self):
+        print()
+        gradient = self._config['gradient']
+        for gradient_property in gradient:
+            value_to_set = gradient[gradient_property]
+            value_set = getattr(self.hplc_controller,gradient_property)()
+            if value_to_set == value_set:
+                print(f'{gradient_property} set to {value_set}')
+            else:
+                raise RuntimeError(f'Gradient property {gradient_property} not set properly.')
+
+        wavelengths = self._config['detector']['wavelengths']
+        while True:
+            wavelength_count_diff = len(wavelengths) - self._WAVELENGTH_COUNT
+            if wavelength_count_diff > 0:
+                wavelengths.pop()
+            elif wavelength_count_diff < 0:
+                wavelengths.append(wavelengths[-1])
+            else:
+                break
+        if self.detector_connected:
+            print()
+            self.ultraviolet_detector_interface.set_wavelengths(wavelengths)
+            wavelengths_set = self.ultraviolet_detector_interface.get_wavelengths()
+            if wavelengths == wavelengths_set:
+                print(f'detector wavelengths set to {wavelengths_set}')
+            else:
+                raise RuntimeError(f'Detector wavelengths not set properly.')
+
+    def start(self):
+        if not self.is_setup:
+            self._setup()
+        self.is_running = True
+        self._sample_timer = Timer(1.0/self._SAMPLE_FREQUENCY,self._sample)
+        self._sample_timer.start()
+
+    def _sample(self):
+        if self.is_setup and self.is_running:
+            gradient_info = self.hplc_controller.get_gradient_info()
+            print(gradient_info)
+            self._sample_timer = Timer(1.0/self._SAMPLE_FREQUENCY,self._sample)
+            self._sample_timer.start()
+
+    def stop(self):
+        self.is_running = False
+        if self.is_setup:
+            self._sample_timer.cancel()
+            self.hplc_controller.stop()
+
+def main(args=None):
+    debug = False
+    # if args is None:
+    #     args = sys.argv[1:]
+    hplc_interface = HplcInterface(debug=debug)
+    hplc_interface.start()
 
 # -----------------------------------------------------------------------------------------
 if __name__ == '__main__':
-
-    debug = False
-    dev = HplcInterface(debug=debug)
+    main()

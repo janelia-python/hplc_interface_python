@@ -1,0 +1,17 @@
+gradient:
+  # concentration units = percent
+  # duration units = minutes
+  pre_ramp_concentration: 10
+  pre_ramp_duration: 1.5
+  ramp_duration: 18.0
+  post_ramp_concentration: 95
+  post_ramp_duration: 1.0
+  final_concentration: 10
+  final_duration: 2.5
+detector:
+  # wavelength units = nm
+  wavelengths:
+    - 200
+    - 400
+    - 600
+    - 800
