@@ -58,8 +58,9 @@ class HplcInterface():
         self._kwargs = kwargs
         self._data_fieldnames = [
             'duration',
-            'state',
+            'gradient_state',
             'concentration',
+            'detector_status',
         ]
 
     def _signal_handler(self,sig,frame):
@@ -172,6 +173,8 @@ class HplcInterface():
     def start(self):
         if not self.is_setup:
             self._setup()
+        if self.detector_connected:
+            self.ultraviolet_detector_interface.turn_lamp_on()
         self.is_running = True
         print()
         print('Setting up data files.')
@@ -200,10 +203,13 @@ class HplcInterface():
     def _sample(self):
         if self.is_setup and self.is_running:
             gradient_info = self.hplc_controller.get_gradient_info()
-            state = gradient_info['state']
-            if state == 'GRADIENT_NOT_STARTED':
-                print('Waiting for injection')
-            elif state == 'FINISHED':
+            gradient_state = gradient_info['state']
+            detector_status = 'NOT_CONNECTED'
+            if self.detector_connected:
+                detector_status = self.ultraviolet_detector_interface.get_status()
+            if gradient_state == 'GRADIENT_NOT_STARTED':
+                print(f'Waiting for injection, detector status: {detector_status}')
+            elif gradient_state == 'FINISHED':
                 self.stop()
                 return
             else:
@@ -213,16 +219,18 @@ class HplcInterface():
                 if self.detector_connected:
                     absorbances = self.ultraviolet_detector_interface.get_absorbances()
                 else:
-                    absorbances = [wavelength*2 for wavelength in self._wavelengths]
+                    absorbances = [0 for wavelength in self._wavelengths]
                 data = {}
                 duration = (time.time() - self._injection_time)/self._SECONDS_PER_MINUTE
                 data['duration'] = f'{duration:.3f}'
-                data['state'] = state
+                data['gradient_state'] = gradient_state
                 data['concentration'] = gradient_info['concentration']
+                data['detector_status'] = detector_status
                 wavelength_absorbances = zip(self._wavelengths,absorbances)
                 for wavelength,absorbance in wavelength_absorbances:
                     data[wavelength] = '{:.2f}'.format(absorbance)
                 self._data_writer.writerow(data)
+                print(data)
             self._sample_timer = Timer(1.0/self._SAMPLE_FREQUENCY,self._sample)
             self._sample_timer.start()
 
@@ -232,6 +240,8 @@ class HplcInterface():
             self._sample_timer.cancel()
             self.hplc_controller.stop()
             self._data_file.close()
+            if self.detector_connected:
+                self.ultraviolet_detector_interface.turn_lamp_off()
 
 def main(args=None):
     debug = False
