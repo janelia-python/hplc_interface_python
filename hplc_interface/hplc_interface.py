@@ -136,6 +136,9 @@ class HplcInterface():
             detector_info = self.ultraviolet_detector_interface.get_detector_info()
             print(f'detector_info: {detector_info}')
             self.detector_connected = True
+            if self.detector_connected:
+                self.ultraviolet_detector_interface.turn_lamp_on()
+                print('turning on detector lamp')
         except IOError:
             print(f'ECOM Toydad UV detector is not connected to the {udi_name}!')
             self.detector_connected = False
@@ -173,8 +176,6 @@ class HplcInterface():
     def start(self):
         if not self.is_setup:
             self._setup()
-        if self.detector_connected:
-            self.ultraviolet_detector_interface.turn_lamp_on()
         self.is_running = True
         print()
         print('Setting up data files.')
@@ -216,6 +217,12 @@ class HplcInterface():
                 if not self._has_been_injected:
                     self._has_been_injected = True
                     self._injection_time = time.time()
+                    print()
+                    print('injected!')
+                    if self.detector_connected:
+                        self.ultraviolet_detector_interface.autozero()
+                        print()
+                        print('autozeroing detector')
                 if self.detector_connected:
                     absorbances = self.ultraviolet_detector_interface.get_absorbances()
                 else:
