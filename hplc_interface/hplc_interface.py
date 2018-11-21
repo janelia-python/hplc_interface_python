@@ -64,6 +64,8 @@ class HplcInterface():
         ]
 
     def _signal_handler(self,sig,frame):
+        if self.is_setup:
+            self._sample_timer.cancel()
         self.stop()
         try:
             sys.exit(0)
@@ -123,6 +125,10 @@ class HplcInterface():
         self.hplc_controller = self._modular_clients[hc_name][hc_form_factor][hc_serial_number]
         print()
         print(f'{hc_name} is connected')
+        prc = self._config['gradient']['pre_ramp_concentration']
+        print()
+        print(f'start mixing at {prc}%')
+        self.hplc_controller.start_mixing([prc,100-prc])
 
         udi_name = 'ultraviolet_detector_interface'
         udi_form_factor = '3x2'
@@ -146,6 +152,7 @@ class HplcInterface():
     def _configure(self):
         print()
         gradient = self._config['gradient']
+        self._gradient_duration = 0
         for gradient_property in gradient:
             value_to_set = gradient[gradient_property]
             value_set = getattr(self.hplc_controller,gradient_property)()
@@ -257,7 +264,6 @@ class HplcInterface():
     def stop(self):
         self.is_running = False
         if self.is_setup:
-            self._sample_timer.cancel()
             self.hplc_controller.stop()
             self._data_file.close()
             if self.detector_connected:
