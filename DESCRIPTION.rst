@@ -5,7 +5,7 @@ This Python package creates a class named HplcInterface.
 
 Authors::
 
-    Peter Polidoro <peterpolidoro@gmail.com>
+    Peter Polidoro <peter@polidoro.io>
 
 License::
 
