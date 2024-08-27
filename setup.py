@@ -21,7 +21,7 @@ setup(
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/janelia-pypi/hplc_interface_python',
+    url='https://github.com/janelia-python/hplc_interface_python',
 
     # Author details
     author='Peter Polidoro',
